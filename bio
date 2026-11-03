@@ -128,3 +128,112 @@ print(
     ' sweep up to 100°C successfully characterized secondary structure stability'
     ' and thermal melting.'
 )
+
+
+
+
+
+
+
+
+
+
+
+
+import time
+from Bio import Entrez, SeqIO
+import matplotlib.pyplot as plt
+import numpy as np
+import RNA
+
+Entrez.email = "your_email@gmail.com"
+taxonomy_id = "2697049"
+
+time.sleep(1 / 10)
+handle = Entrez.efetch(
+    db="nucleotide", id="NC_045512.2", rettype="gb", retmode="text"
+)
+record = SeqIO.read(handle, "genbank")
+handle.close()
+
+seq = str(record.seq).upper()
+
+min_length = 50
+max_length = 1000
+STOP_CODONS = {"TAA", "TAG", "TGA"}
+orfs = []
+
+for frame in range(3):
+  i = frame
+  while i < len(seq) - 2:
+    if seq[i : i + 3] == "ATG":
+      start = i
+      j = i + 3
+      while j < len(seq) - 2:
+        codon = seq[j : j + 3]
+        if codon in STOP_CODONS:
+          break
+        j += 3
+      if j < len(seq) - 2 and seq[j : j + 3] in STOP_CODONS:
+        length_aa = (j - start) // 3
+        if max_length >= length_aa >= min_length:
+          orfs.append({
+              "frame": frame + 1,
+              "start": start + 1,
+              "end": j + 3,
+              "length_aa": length_aa,
+          })
+      i += 3
+    else:
+      i += 3
+
+for feature in record.features:
+  if feature.type == "CDS":
+    name = feature.qualifiers.get("gene", ["?"])[0]
+    start = int(feature.location.start)
+    end = int(feature.location.end)
+    print(
+        f"CDS {name}: {start}–{end}, {end - start} нт ({(end - start) // 3} аа)"
+    )
+
+target_cds = None
+for feature in record.features:
+  if feature.type == "CDS" and feature.qualifiers.get("gene", [""])[0] == "E":
+    start = int(feature.location.start)
+    end = int(feature.location.end)
+    target_cds = str(record.seq[start:end]).upper()
+    break
+
+if not target_cds:
+  start, end = int(record.features[5].location.start), int(
+      record.features[5].location.end
+  )
+  target_cds = str(record.seq[start:end]).upper()
+
+md_g4 = RNA.md()
+md_g4.temperature = 0.0
+md_g4.gquad = 1
+fc_g4 = RNA.fold_compound(target_cds, md_g4)
+ss_g4, mfe_g4 = fc_g4.mfe()
+print(f"G4 MFE при 0°C: {mfe_g4} ккал/моль")
+print(f"Структура: {ss_g4}")
+
+temps = np.linspace(0, 100, 51)
+mfes = []
+for T in temps:
+  md = RNA.md()
+  md.temperature = T
+  fc = RNA.fold_compound(target_cds, md)
+  ss, mfe = fc.mfe()
+  mfes.append(mfe)
+
+plt.figure(figsize=(8, 5))
+plt.plot(temps, mfes, marker="o", color="b")
+plt.axvline(x=37.0, color="r", linestyle="--", label="37°C")
+plt.title("Залежність енергії від температури (ген E)")
+plt.xlabel("Температура (°C)")
+plt.ylabel("MFE (ккал/моль)")
+plt.legend()
+plt.grid(True)
+plt.savefig("melting_curve.png")
+plt.show()
