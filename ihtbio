@@ -2,22 +2,21 @@ import time
 from Bio import Entrez
 from Bio import SeqIO
 
-# --- НАСТРОЙКА ENTREZ ---
+
 Entrez.email = 'ваша_почта@gmail.com' # Обязательно укажите свою почту
 time.sleep(1 / 10) # Защита от блокировок (ограничение частоты запросов)
 
-print("--- Задание 1: Загрузка генома SARS-CoV-2 ---")
-# Используем корректный ID NC_045512.2 (актуальная версия в NCBI)
+print("Загрузка геному SARS-CoV-2")
 handle = Entrez.efetch(db='nucleotide', id='NC_045512.2', rettype='gb', retmode='text')
 record = SeqIO.read(handle, 'genbank')
 handle.close()
 
 seq = str(record.seq).upper()
-print(f"Геном успешно загружен. Длина последовательности: {len(seq)} нуклеотидов.\n")
+print(f"Довжина послідовності: {len(seq)} нуклеотидів.\n")
 
 
-print("--- Задание 2: Поиск потенциальных ORF областей ---")
-# Пороги длины в аминокислотах (зададим, например, от 100 до 1000 аа)
+print("Пошук потенційних ORF---")
+
 min_length = 100 
 max_length = 1000
 STOP_CODONS = {'TAA', 'TAG', 'TGA'}
@@ -49,13 +48,13 @@ for frame in range(3):
         else:
             i += 3
 
-print(f"Найдено потенциальных ORF (длиной {min_length}-{max_length} aa): {len(orfs)}")
+print(f"Знайдено потенційних ORF (довжиною {min_length}-{max_length} aa): {len(orfs)}")
 for orf in orfs[:5]: # Выведем первые 5 для примера
     print(orf)
 print("...\n")
 
 
-print("--- Задание 3: Вывод аннотированных CDS из GenBank ---")
+print("Витяг анотованих CDS із GenBank")
 for feature in record.features:
     if feature.type == 'CDS':
         name = feature.qualifiers.get('gene', ['?'])[0]
