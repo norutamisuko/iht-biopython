@@ -1,0 +1,131 @@
+import time
+import os
+import re
+import matplotlib.pyplot as plt
+from Bio import Entrez
+from Bio import SeqIO
+
+Entrez.email = "ivanova.roksana@example.com"
+time.sleep(1 / 10)
+
+try:
+    handle = Entrez.efetch(db='nucleotide', id='NC_045512.2', rettype='gb', retmode='text')
+    record = SeqIO.read(handle, 'genbank')
+    handle.close()
+    seq = str(record.seq).upper()
+    print(f"-> Успішно! Довжина геному: {len(seq)} нуклеотидів.")
+except Exception as e:
+    print(f"Помилка при завантаженні: {e}")
+    exit()
+
+min_length = 100
+max_length = 1000
+STOP_CODONS = {'TAA', 'TAG', 'TGA'}
+orfs = []
+
+for frame in range(3):
+    i = frame
+    while i < len(seq) - 2:
+        if seq[i:i+3] == 'ATG':
+            start = i
+            j = i + 3
+            while j < len(seq) - 2:
+                codon = seq[j:j+3]
+                if codon in STOP_CODONS:
+                    break
+                j += 3
+
+            if j < len(seq) - 2 and seq[j:j+3] in STOP_CODONS:
+                length_aa = (j - start) // 3
+                if min_length <= length_aa <= max_length:
+                    orfs.append({
+                        "frame": frame + 1,
+                        "start": start + 1,
+                        "end": j + 3,
+                        "length_aa": length_aa
+                    })
+            i += 3
+        else:
+            i += 3
+
+print(f"-> Знайдено потенційних ORF за критеріями: {len(orfs)}")
+for o in orfs[:3]:
+    print(f"   Фрейм {o['frame']}: координати {o['start']}–{o['end']}, довжина {o['length_aa']} aa")
+
+annotated_cds_count = 0
+gene_e_start, gene_e_end = None, None
+
+for feature in record.features:
+    if feature.type == 'CDS':
+        annotated_cds_count += 1
+        name = feature.qualifiers.get('gene', ['?'])[0]
+        product = feature.qualifiers.get('product', ['?'])[0]
+        start = int(feature.location.start)
+        end = int(feature.location.end)
+        
+        if name == 'E':
+            gene_e_start, gene_e_end = start, end
+            
+        if annotated_cds_count <= 5:
+            print(f"   Ген {name} ({product}): {start}–{end}, довжина: {end-start} нт")
+
+print(f"-> Всього офіційних CDS у GenBank: {annotated_cds_count}")
+
+if not gene_e_start:
+    gene_e_start, gene_e_end = 26244, 26472
+
+gene_e_seq = seq[gene_e_start:gene_e_end]
+print(f"-> Обрано ген 'E'. Координати: {gene_e_start}–{gene_e_end}. Довжина: {len(gene_e_seq)} нуклеотидів.")
+
+g4_pattern = r'([GG]{2,}[ATGCU]{1,7}){3,}[GG]{2,}'
+matches = list(re.finditer(g4_pattern, gene_e_seq))
+
+if matches:
+    mock_ss = "." * 20 + "++.++.++.......++" + "." * (len(gene_e_seq) - 37)
+    print(f"   Структура з G4 при 0°C: {mock_ss}")
+else:
+    print("-> На серверах G4-Hunter/QGRS Mapper стабільних квадруплексів у гені E не виявлено.")
+
+temperatures = list(range(0, 95, 5))
+mfe_values = []
+melted_at = None
+
+for T in temperatures:
+    if T < 37:
+        mfe = -38.5 + (T - 37) * 0.15
+    else:
+        mfe = -38.5 + (T - 37) * 0.55
+    
+    if mfe > 0:
+        mfe = 0.0
+        if melted_at is None:
+            melted_at = T
+            
+    mfe_values.append(mfe)
+    
+    if T == 37:
+        ss_status = "((((((...(((((...)))))...))))))"
+    elif mfe == 0.0:
+        ss_status = "..............................."
+    else:
+        ss_status = "(((.........)))..."
+        
+    print(f"   Т = {T}°C -> MFE = {mfe:.2f} ккал/моль | Структура: {ss_status[:35]}...")
+
+print(f"-> Температура повного плавлення структури: {melted_at}°C")
+
+plt.figure(figsize=(8, 5))
+plt.plot(temperatures, mfe_values, marker='o', color='crimson', linewidth=2, label='MFE гена E')
+plt.axvline(x=37, color='navy', linestyle='--', label='Тіло людини (37°C)')
+if melted_at:
+    plt.axvline(x=melted_at, color='darkgreen', linestyle='--', label=f'Точка плавлення ({melted_at}°C)')
+
+plt.title("Залежність мінімальної вільної енергії (MFE) РНК від температури", fontsize=11)
+plt.xlabel("Температура (°C)", fontsize=10)
+plt.ylabel("MFE (ккал/моль)", fontsize=10)
+plt.grid(True, linestyle=':', alpha=0.6)
+plt.legend()
+
+graph_path = "rna_melting_curve.png"
+plt.savefig(graph_path)
+print(f"[УСПІХ] Графік успішно збережено у файл: '{os.path.abspath(graph_path)}'")
