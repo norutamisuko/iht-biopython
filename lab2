@@ -1,0 +1,73 @@
+from Bio import Entrez
+from Bio import SeqIO
+Entrez.email = 'your@email.com'
+handle = Entrez.efetch(db='nucleotide', id='NC_045512.2',rettype='gb', retmode='text')
+record = SeqIO.read(handle, 'genbank')
+seq = str(record.seq).upper()
+print(seq)
+handle.close()
+	Приклад власного алгоритму пошуку ORF:
+min_length = 100
+max_length = 1000
+STOP_CODONS = {'TAA', 'TAG', 'TGA'}
+
+orfs = []
+
+for frame in range(3):
+    i = frame
+
+    while i < len(seq) - 2:
+
+        # шукаємо ATG
+        if seq[i:i+3] == 'ATG':
+
+            start = i
+            j = i + 3
+
+            # йдемо по кодонах до стоп-кодона
+            while j < len(seq) - 2:
+                codon = seq[j:j+3]
+
+                if codon in STOP_CODONS:
+                    break
+
+                j += 3
+
+            # якщо знайшли стоп-кодон
+            if j < len(seq) - 2 and seq[j:j+3] in STOP_CODONS:
+
+                length_aa = (j - start) // 3
+
+                if max_length >= length_aa >= min_length:
+                    orfs.append({
+                        "frame": frame + 1,
+                        "start": start + 1,
+                        "end": j + 3,
+                        "length_aa": length_aa
+                    })
+
+            # переходимо до наступного ATG
+            i += 3
+
+        else:
+            i += 3
+
+
+for orfs_print in orfs:
+	print(orfs_print)
+
+Приклад алгоритму виводу інформації CDS:
+for feature in record.features:
+    if feature.type == 'CDS':
+        name = feature.qualifiers.get('gene', ['?'])[0]
+        start = int(feature.location.start)
+        end   = int(feature.location.end)
+        cds_seq = record.seq[start:end]
+        print(f'{name}: {start}–{end}, {len(cds_seq)} нт')
+
+Приклад використання ViennaRNA
+import RNA
+seq_fold = seq[start: end +1]
+(ss, mfe) = RNA.fold(seq_fold)
+print(mfe)
+print(ss)
