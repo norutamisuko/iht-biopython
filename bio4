@@ -1,157 +1,63 @@
-import os
-import re
 import time
-from Bio import Entrez
-from Bio import SeqIO
+from Bio import Entrez, SeqIO
 import matplotlib.pyplot as plt
 import RNA
 
 Entrez.email = 'ivanova.roksana@example.com'
-time.sleep(1 / 10)
-
-genome_id = 'NC_045512.2'
+time.sleep(0.1)
 
 handle = Entrez.efetch(
-    db='nucleotide', id=genome_id, rettype='gb', retmode='text'
+    db='nucleotide', id='NC_045512.2', rettype='gb', retmode='text'
 )
 record = SeqIO.read(handle, 'genbank')
 handle.close()
 seq = str(record.seq).upper()
-print(f'-> Успішно! Завантажено геном {genome_id}. Довжина: {len(seq)} нт.')
-except Exception as e:
-  print(f'Помилка при завантаженні: {e}')
-  exit()
 
-min_length = 100
-max_length = 1000
-STOP_CODONS = {'TAA', 'TAG', 'TGA'}
-orfs = []
-
-for frame in range(3):
-  i = frame
+min_len, max_len, orfs = 100, 1000, []
+for f in range(3):
+  i = f
   while i < len(seq) - 2:
     if seq[i : i + 3] == 'ATG':
-      start = i
-      j = i + 3
-      while j < len(seq) - 2:
-        codon = seq[j : j + 3]
-        if codon in STOP_CODONS:
-          break
+      start, j = i, i + 3
+      while j < len(seq) - 2 and seq[j : j + 3] not in {'TAA', 'TAG', 'TGA'}:
         j += 3
-
-      if j < len(seq) - 2 and seq[j : j + 3] in STOP_CODONS:
-        length_aa = (j - start) // 3
-        if min_length <= length_aa <= max_length:
-          orfs.append({
-              'frame': frame + 1,
-              'start': start + 1,
-              'end': j + 3,
-              'length_aa': length_aa,
-          })
-      i += 3
+      if j < len(seq) - 2:
+        L = (j - start) // 3
+        if min_len <= L <= max_len:
+          orfs.append(
+              {'frame': f + 1, 'start': start + 1, 'end': j + 3, 'length_aa': L}
+          )
+      i = j + 3
     else:
       i += 3
 
-print(f'-> Знайдено потенційних ORF за критеріями: {len(orfs)}')
-for o in orfs[:3]:
-  print(
-      f"    Фрейм {o['frame']}: координати {o['start']}–{o['end']},"
-      f" довжина {o['length_aa']} aa"
-  )
+for feat in record.features:
+  if feat.type == 'CDS':
+    print(
+        f"CDS {feat.qualifiers.get('gene', ['?'])[0]}:"
+        f" {int(feat.location.start)}–{int(feat.location.end)}"
+    )
 
-annotated_cds_count = 0
-gene_e_start, gene_e_end = None, None
-
-for feature in record.features:
-  if feature.type == 'CDS':
-    annotated_cds_count += 1
-    name = feature.qualifiers.get('gene', ['?'])[0]
-    product = feature.qualifiers.get('product', ['?'][0])
-    start = int(feature.location.start)
-    end = int(feature.location.end)
-
-    if name == 'E':
-      gene_e_start, gene_e_end = start, end
-
-    if annotated_cds_count <= 5:
-      print(f'    Ген {name} ({product}): {start}–{end}, довжина: {end-start} нт')
-
-print(f'-> Всього офіційних CDS у GenBank: {annotated_cds_count}')
-
-if not gene_e_start:
-  gene_e_start, gene_e_end = 26244, 26472
-
-gene_e_seq = seq[gene_e_start:gene_e_end]
-print(
-    f"-> Обрано ген 'E'. Координати: {gene_e_start}–{gene_e_end}. Довжина:"
-    f' {len(gene_e_seq)} нуклеотидів.'
+e_seq = next(
+    str(seq[int(f.location.start) : int(f.location.end)])
+    for f in record.features
+    if f.type == 'CDS' and f.qualifiers.get('gene', ['?'])[0] == 'E'
 )
 
-# Пункт 8: Використання ViennaRNA для аналізу структури обраної ділянки
-md = RNA.fold_compound(gene_e_seq)
-ss_0, mfe_0 = md.mfe()
-print(f'    Структура при 0°C (MFE = {mfe_0:.2f}): {ss_0}')
+md = RNA.fold_compound(e_seq)
+ss, mfe = md.mfe()
+print(f'MFE (0°C): {mfe}, SS: {ss}')
 
-if '+' in ss_0:
-  print('    Знайдено квадруплекс (містить знак "+").')
-else:
-  print(
-      '    У крапково-дужковому представленні за ViennaRNA знак "+" відсутній'
-      ' (стандартна шпилька).'
-  )
-
-# Пункт 9: Реальний розрахунок енергії плавлення через ViennaRNA API при різних температурах
-temperatures = list(range(37, 96, 5))
-mfe_values = []
-melted_at = None
-
-for T in temperatures:
+temps, mfes = range(37, 96, 5), []
+for T in temps:
   md.set_temperature(float(T))
-  ss_t, mfe_t = md.mfe()
-  mfe_values.append(mfe_t)
+  mfes.append(md.mfe()[1])
 
-  print(f'    Т = {T}°C -> MFE = {mfe_t:.2f} ккал/моль | Структура: {ss_t[:30]}')
-
-# Визначення точки плавлення (коли структура повністю руйнується / розгортається, енергія прямує до 0)
-for T, mfe in zip(temperatures, mfe_values):
-  if abs(mfe) < 1.5:  # критерій майже повної втрати стабільності структури
-    melted_at = T
-    break
-
-if melted_at is None:
-  melted_at = temperatures[-1]
-
-print(f'-> Приблизна температура плавлення структури: {melted_at}°C')
-
-plt.figure(figsize=(8, 5))
-plt.plot(
-    temperatures,
-    mfe_values,
-    marker='o',
-    color='crimson',
-    linewidth=2,
-    label='MFE гена E (ViennaRNA)',
-)
-plt.axvline(
-    x=37, color='navy', linestyle='--', label='Тіло людини (37°C)'
-)
-if melted_at:
-  plt.axvline(
-      x=melted_at,
-      color='darkgreen',
-      linestyle='--',
-      label=f'Точка плавлення (~{melted_at}°C)',
-  )
-
-plt.title(
-    'Залежність мінімальної вільної енергії (MFE) РНК від температури',
-    fontsize=11,
-)
-plt.xlabel('Температура (°C)', fontsize=10)
-plt.ylabel('MFE (ккал/моль)', fontsize=10)
-plt.grid(True, linestyle=':', alpha=0.6)
-plt.legend()
-
-graph_path = 'rna_melting_curve.png'
-plt.savefig(graph_path)
-print(f"[УСПІХ] Графік успішно збережено у файл: '{os.path.abspath(graph_path)}'")
+plt.figure(figsize=(7, 4))
+plt.plot(list(temps), mfes, marker='o', color='crimson')
+plt.title('MFE vs Temperature (Gene E)')
+plt.xlabel('Temperature (°C)')
+plt.ylabel('MFE (kcal/mol)')
+plt.grid(True)
+plt.savefig('rna_melting_curve.png')
+print('Графік збережено у "rna_melting_curve.png"')
