@@ -1,0 +1,106 @@
+import time
+from Bio import Entrez
+from Bio import SeqIO
+import matplotlib.pyplot as plt
+import RNA
+
+Entrez.email = 'your@email.com'
+
+search_handle = Entrez.esearch(
+    db='nucleotide', term='txid2697049[Organism:exp]', retmax=5
+)
+search_results = Entrez.read(search_handle)
+search_handle.close()
+time.sleep(1 / 10)
+
+handle = Entrez.efetch(
+    db='nucleotide', id='NC_045512.2', rettype='gb', retmode='text'
+)
+record = SeqIO.read(handle, 'genbank')
+seq = str(record.seq).upper()
+handle.close()
+time.sleep(1 / 10)
+
+min_length = 100
+max_length = 1000
+STOP_CODONS = {'TAA', 'TAG', 'TGA'}
+
+orfs = []
+
+for frame in range(3):
+  i = frame
+
+  while i < len(seq) - 2:
+
+    if seq[i : i + 3] == 'ATG':
+
+      start = i
+      j = i + 3
+
+      while j < len(seq) - 2:
+        codon = seq[j : j + 3]
+
+        if codon in STOP_CODONS:
+          break
+
+        j += 3
+
+      if j < len(seq) - 2 and seq[j : j + 3] in STOP_CODONS:
+
+        length_aa = (j - start) // 3
+
+        if max_length >= length_aa >= min_length:
+          orfs.append({
+              'frame': frame + 1,
+              'start': start + 1,
+              'end': j + 3,
+              'length_aa': length_aa,
+          })
+
+      i += 3
+
+    else:
+      i += 3
+
+for orfs_print in orfs:
+  print(orfs_print)
+
+for feature in record.features:
+  if feature.type == 'CDS':
+    name = feature.qualifiers.get('gene', ['?'])[0]
+    start = int(feature.location.start)
+    end = int(feature.location.end)
+    cds_seq = record.seq[start:end]
+    print(f'{name}: {start}–{end}, {len(cds_seq)} нт')
+
+if orfs:
+  start = orfs[0]['start'] - 1
+  end = orfs[0]['end'] - 1
+else:
+  start, end = 0, 300
+
+seq_fold = seq[start : end + 1]
+(ss, mfe) = RNA.fold(seq_fold)
+print(mfe)
+print(ss)
+
+if '+' in ss:
+  print('Quadruplex found')
+
+temperatures = range(37, 101, 5)
+mfe_values = []
+
+md = RNA.fold_compound(seq_fold)
+for temp in temperatures:
+  md.set_temperature(temp)
+  (ss_t, mfe_t) = md.mfe()
+  mfe_values.append(mfe_t)
+
+plt.figure(figsize=(8, 5))
+plt.plot(list(temperatures), mfe_values, marker='o', color='b')
+plt.title('MFE vs Temperature')
+plt.xlabel('Temperature (°C)')
+plt.ylabel('MFE (kcal/mol)')
+plt.grid(True)
+plt.savefig('rna_melting.png')
+plt.close()
