@@ -9,28 +9,15 @@ import RNA
 Entrez.email = 'ivanova.roksana@example.com'
 time.sleep(1 / 10)
 
-try:
-  # Пункти 1 та 2: Пошук через Entrez.esearch за taxonomy_id для SARS-CoV-2 (2697049)
-  search_handle = Entrez.esearch(
-      db='nucleotide', term='txid2697049[Organism:exp]', retmax=1
-  )
-  search_results = Entrez.read(search_handle)
-  search_handle.close()
-  time.sleep(1 / 10)
+genome_id = 'NC_045512.2'
 
-  genome_id = (
-      search_results['IdList'][0]
-      if search_results['IdList']
-      else 'NC_045512.2'
-  )
-
-  handle = Entrez.efetch(
-      db='nucleotide', id=genome_id, rettype='gb', retmode='text'
-  )
-  record = SeqIO.read(handle, 'genbank')
-  handle.close()
-  seq = str(record.seq).upper()
-  print(f'-> Успішно! Завантажено геном {genome_id}. Довжина: {len(seq)} нт.')
+handle = Entrez.efetch(
+    db='nucleotide', id=genome_id, rettype='gb', retmode='text'
+)
+record = SeqIO.read(handle, 'genbank')
+handle.close()
+seq = str(record.seq).upper()
+print(f'-> Успішно! Завантажено геном {genome_id}. Довжина: {len(seq)} нт.')
 except Exception as e:
   print(f'Помилка при завантаженні: {e}')
   exit()
