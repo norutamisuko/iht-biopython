@@ -49,7 +49,7 @@ RNA.cvar.temperature = 0.0
 ss, mfe = RNA.fold(e_seq)
 print(f'MFE (0°C): {mfe}, SS: {ss}')
 
-temps, mfes = range(37, 96, 5), []
+temps, mfes = range(-1, 110, 3), []
 for T in temps:
   RNA.cvar.temperature = float(T)
   mfes.append(RNA.fold(e_seq)[1])
