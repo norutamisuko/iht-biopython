@@ -3,7 +3,8 @@ from Bio import Entrez, SeqIO
 import matplotlib.pyplot as plt
 import RNA
 
-Entrez.email = 'ivanova.roksana@example.com'
+print('Іванова Роксана Сергіївна 2 курс КНУТШ ІВТ ОП "Хімія біомолекул"')
+Entrez.email = 'aboba.com'
 time.sleep(0.1)
 
 handle = Entrez.efetch(
