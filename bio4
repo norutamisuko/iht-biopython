@@ -44,14 +44,14 @@ e_seq = next(
     if f.type == 'CDS' and f.qualifiers.get('gene', ['?'])[0] == 'E'
 )
 
-md = RNA.fold_compound(e_seq)
-ss, mfe = md.mfe()
+RNA.cvar.temperature = 0.0
+ss, mfe = RNA.fold(e_seq)
 print(f'MFE (0°C): {mfe}, SS: {ss}')
 
 temps, mfes = range(37, 96, 5), []
 for T in temps:
-  md.set_temperature(float(T))
-  mfes.append(md.mfe()[1])
+  RNA.cvar.temperature = float(T)
+  mfes.append(RNA.fold(e_seq)[1])
 
 plt.figure(figsize=(7, 4))
 plt.plot(list(temps), mfes, marker='o', color='crimson')
