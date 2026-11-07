@@ -1,0 +1,85 @@
+from Bio import Entrez, SeqIO
+import RNA
+import matplotlib.pyplot as plt
+
+Entrez.email = "student@example.com"
+handle = Entrez.efetch(db="nucleotide", id="NC_045512.2", rettype="gb", retmode="text")
+record = SeqIO.read(handle, "genbank")
+handle.close()
+seq = str(record.seq).upper()
+
+min_length, max_length = 100, 1000
+STOP_CODONS = {"TAA", "TAG", "TGA"}
+orfs = []
+for frame in range(3):
+    i = frame
+    while i < len(seq) - 2:
+        if seq[i:i+3] == "ATG":
+            start = i
+            j = i + 3
+            while j < len(seq) - 2:
+                if seq[j:j+3] in STOP_CODONS:
+                    break
+                j += 3
+            if j < len(seq) - 2 and seq[j:j+3] in STOP_CODONS:
+                length_aa = (j - start) // 3
+                if min_length <= length_aa <= max_length:
+                    orfs.append({"frame": frame + 1, "start": start + 1, "end": j + 3, "length_aa": length_aa})
+            i += 3
+        else:
+            i += 3
+
+for orf in orfs:
+    print(orf)
+
+cds_features = []
+for feature in record.features:
+    if feature.type == "CDS":
+        name = feature.qualifiers.get("gene", ["?"])[0]
+        start = int(feature.location.start)
+        end = int(feature.location.end)
+        cds_seq = record.seq[start:end]
+        cds_features.append((name, start, end, len(cds_seq)))
+        print(f"{name}: {start}–{end}, {len(cds_seq)} нт")
+
+target_cds = min([f for f in record.features if f.type == "CDS"], key=lambda f: int(f.location.end) - int(f.location.start))
+target_start = int(target_cds.location.start)
+target_end = int(target_cds.location.end)
+target_seq = str(record.seq[target_start:target_end]).replace("T", "U")
+
+md_g4 = RNA.md()
+md_g4.gquad = 1
+md_g4.temperature = 0
+fc_g4 = RNA.fold_compound(target_seq, md_g4)
+ss_g4, mfe_g4 = fc_g4.mfe()
+has_quadruplex = "+" in ss_g4
+print(f"G4 Structure (0C): {ss_g4}, MFE: {mfe_g4}, Has Quadruplex: {has_quadruplex}")
+
+md_37 = RNA.md()
+md_37.temperature = 37.0
+fc_37 = RNA.fold_compound(target_seq, md_37)
+ss_37, mfe_37 = fc_37.mfe()
+
+temperatures = list(range(0, 101, 2))
+energies = []
+melting_temp = None
+
+for temp in temperatures:
+    md_t = RNA.md()
+    md_t.temperature = float(temp)
+    fc_t = RNA.fold_compound(target_seq, md_t)
+    ss_t, mfe_t = fc_t.mfe()
+    energies.append(mfe_t)
+    if "(" not in ss_t and ")" not in ss_t and melting_temp is None:
+        melting_temp = temp
+
+print(f"37C MFE: {mfe_37}, SS: {ss_37}")
+print(f"Melting Temperature: {melting_temp} C")
+
+plt.figure()
+plt.plot(temperatures, energies, marker='o')
+plt.title("Free Energy vs Temperature")
+plt.xlabel("Temperature (C)")
+plt.ylabel("Free Energy (kcal/mol)")
+plt.grid(True)
+plt.savefig("mfe_vs_temp.png")
