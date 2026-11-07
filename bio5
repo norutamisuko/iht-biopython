@@ -1,0 +1,28 @@
+from Bio import Entrez, SeqIO
+import RNA, matplotlib.pyplot as plt
+
+Entrez.email = "a@a.com"
+seq = str(SeqIO.read(Entrez.efetch("nucleotide", id="NC_045512.2", rettype="gb", retmode="text"), "genbank").seq).upper()
+
+for f in range(3):
+    i = f
+    while i < len(seq) - 2:
+        if seq[i:i+3] == "ATG":
+            j = i + 3
+            while j < len(seq) - 2 and seq[j:j+3] not in {"TAA", "TAG", "TGA"}: j += 3
+            if j < len(seq) - 2 and 100 <= (j - i) // 3 <= 1000: print(f+1, i+1, j+3)
+        i += 3
+
+for x in record.features if 'record' in globals() else []: pass # CDS
+for f in (r := SeqIO.read(Entrez.efetch("nucleotide", id="NC_045512.2", rettype="gb", retmode="text"), "genbank")).features:
+    if f.type == "CDS": print(f.qualifiers.get("gene", ["?"][0]), f.location.start, f.location.end)
+
+ts = str(r.seq[int((cds:=min([f for f in r.features if f.type=='CDS'], key=lambda x: int(x.location.end)-int(x.location.start))).location.start):int(cds.location.end)]).replace("T", "U")
+md = RNA.md(); md.gquad = 1; md.temperature = 0; fc = RNA.fold_compound(ts, md)
+print(fc.mfe()[0], "+" in fc.mfe()[1])
+
+temps, energies = list(range(0, 101, 10)), []
+for t in temps:
+    md.temperature = float(t); fc = RNA.fold_compound(ts, md); energies.append(fc.mfe()[1])
+
+plt.plot(temps, energies, marker='o'); plt.savefig("mfe.png")
