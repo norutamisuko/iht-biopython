@@ -87,3 +87,8 @@ if subprocess.run(["which", "FastTree"], capture_output=True).returncode == 0:
         subprocess.run(["FastTree", "-wag", "-gamma", "msa.fasta"], stdout=outfile)
 
 print("Execution completed.")
+
+
+
+print(df[["Accession", "Date", "Mutated_RS_View"]])
+df.to_csv("lab_results_table.csv", index=False)
