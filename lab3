@@ -7,7 +7,7 @@ from Bio.SeqRecord import SeqRecord
 from Bio.Align import PairwiseAligner, MultipleSeqAlignment
 import Bio.Align.substitution_matrices
 
-Entrez.email = "user@example.com"
+Entrez.email = "ivanovaroksana383@gmail.com"
 
 RS = Seq("AUGUACUCAUUCGUUUCGGAAGAGACAGGUACGUUAAUAGCGUACUUCUUUUUCUUGCUUUCGUGGUAUUCUUGCUAGUUACACUAGCCAUCCUUACUGCGCUUCGAUUGUGUGCGUACUGCUGCAAUAUUGUGCGUACGAGCAGCA")
 
