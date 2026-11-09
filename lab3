@@ -77,6 +77,14 @@ aligner = PairwiseAligner()
 aligner.mode = "global"
 aligner.substitution_matrix = Bio.Align.substitution_matrices.load("BLOSUM62")
 
+ref_protein = RS.translate(to_stop=False)
+mut_protein = Seq(df.loc[0, "RS_Region"].upper()).translate(to_stop=False)
+
+alignments = aligner.align(ref_protein, mut_protein)
+best_alignment = alignments[0]
+
+print("Попарне вирівнювання:")
+print(best_alignment)
 seq_records = [SeqRecord(protein_ref, id="Reference")]
 for idx, row in df.iterrows():
     p_seq = Seq(row["RS_Region"].upper()).translate(to_stop=False)
