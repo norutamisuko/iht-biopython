@@ -13,3 +13,46 @@ with open("protein_m.fasta", "w") as f:
   f.write(f">SARS-CoV-2_E_protein_mutated\n{protein_mut}\n")
 
 print("Файли protein.fasta та protein_m.fasta успішно створено!")
+
+
+
+
+
+import os
+import zipfile
+from Bio.PDB import MMCIFParser, PDBIO
+
+# Назва вашого завантаженого ZIP-архіву (змініть на реальну, якщо вона інша)
+zip_filename = "fold_results.zip"  # або вкажіть шлях до файлу
+
+# 1. Розпаковуємо ZIP-архів
+with zipfile.ZipFile(zip_filename, "r") as zip_ref:
+  zip_ref.extractall("extracted_alphafold")
+  print("Архів успішно розпаковано!")
+
+# 2. Шукаємо файл із розширенням .cif всередині розпакованої папки
+cif_file = None
+for root, dirs, files in os.walk("extracted_alphafold"):
+  for file in files:
+    if file.endswith(".cif"):
+      cif_file = os.path.join(root, file)
+      break
+  if cif_file:
+    break
+
+if not cif_file:
+  raise FileNotFoundError(
+      "Не вдалося знайти .cif файл усередині розпакованого архіву!"
+  )
+
+print(f"Знайдено файл моделі: {cif_file}")
+
+# 3. Конвертуємо знайдений .cif у стандартний .pdb для лабораторної
+parser = MMCIFParser(QUIET=True)
+structure = parser.get_structure("AlphaFold_Model", cif_file)
+
+io = PDBIO()
+io.set_structure(structure)
+io.save("model_01.pdb")
+
+print("Готово! Файл збережено як 'model_01.pdb'.")
