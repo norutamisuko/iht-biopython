@@ -1,0 +1,92 @@
+import json, os, subprocess
+import pandas as pd
+from Bio import Entrez, SeqIO, Align, AlignIO
+from Bio.Seq import Seq
+from Bio.Align import substitution_matrices
+
+Entrez.email = "ivanovaroksana383@gmail.com"
+
+RS = "AUGUACUCAUUCGUUUCGGAAGAGACAGGUACGUUAAUAGCGUACUUCUUUUUCUUGCUUUCGUGGUAUUCUUGCUAGUUACACUAGCCAUCCUUACUGCGCUUCGAUUGUGUGCGUACUGCUGCAAUAUUGUGCGUACGAGCAGCA".replace("U", "T")
+FLANK = 20
+year_ranges = [("2020/10/01", "2020/12/31"), ("2021/01/01", "2021/12/31"), ("2022/01/01", "2022/12/31"),
+               ("2023/01/01", "2023/12/31"), ("2024/01/01", "2024/12/31"), ("2025/01/01", "2025/03/01")]
+
+LOC = Align.PairwiseAligner(mode="local", match_score=2, mismatch_score=-3, open_gap_score=-6, extend_gap_score=-1)
+GLB = Align.PairwiseAligner(mode="global", match_score=1, mismatch_score=-1, open_gap_score=-3, extend_gap_score=-1)
+
+def map_pos(aln, q):
+    tb, qb = aln.aligned
+    k = min(range(len(qb)), key=lambda i: 0 if qb[i][0] <= q < qb[i][1] else min(abs(q - qb[i][0]), abs(q - qb[i][1])))
+    return tb[k][0] + (q - qb[k][0])
+
+def locate(genome):
+    a = LOC.align(genome, RS)[0]
+    return map_pos(a, 0), map_pos(a, len(RS) - 1) + 1
+
+def mutations(ref, s):
+    a = GLB.align(ref, s)[0]
+    out, muts = list(s), []
+    for (r0, r1), (s0, s1) in zip(*a.aligned):
+        for k in range(r1 - r0):
+            r, c = ref[r0 + k], s[s0 + k]
+            if r != c and c in "ACGT":
+                muts.append(f"{r0 + k + 1}{r}>{c}")
+                out[s0 + k] = c.lower()
+    return muts, "".join(out)
+
+def fetch():
+    if os.path.exists("genomes.json"):
+        return json.load(open("genomes.json"))
+    res = []
+    for a, b in year_ranges:
+        q = f'SARS-CoV-2[Organism] AND "Homo sapiens"[Host] AND 29000:30000[SLEN] AND {a}:{b}[PDAT]'
+        ids = Entrez.read(Entrez.esearch(db="nucleotide", term=q, retmax=3))["IdList"]
+        if ids:
+            for r in SeqIO.parse(Entrez.efetch(db="nucleotide", id=ids, rettype="gb", retmode="text"), "genbank"):
+                res.append({"acc": r.id, "date": r.annotations.get("date"), "seq": str(r.seq).upper()})
+    json.dump(res, open("genomes.json", "w"))
+    return res
+
+def prot(s):
+    s = s.upper()
+    return str(Seq(s[:len(s) // 3 * 3]).translate())
+
+def main():
+    rows = []
+    for g in fetch():
+        s, e = locate(g["seq"])
+        muts, marked = mutations(RS, g["seq"][s:e])
+        rows.append({"Accession": g["acc"], "Date": g["date"], "Flank_5": g["seq"][max(s - FLANK, 0):s],
+                     "Flank_3": g["seq"][e:e + FLANK], "Mutations": ",".join(muts) or "none",
+                     "Mutated_RS_View": marked.replace("T", "U").replace("t", "u"), "prot": prot(marked)})
+    df = pd.DataFrame(rows)
+    print(df[["Accession", "Date", "Mutations", "Mutated_RS_View"]].head(20).to_string())
+    df.drop(columns="prot").to_csv("lab_results_table.csv", index=False)
+
+    wt = prot(RS)
+    open("query.fasta", "w").write(f">wt\n{wt}\n")
+    diff = df[df.prot != wt]
+    if diff.empty:
+        print("Амінокислотних замін немає"); return
+    m = diff.iloc[0].prot
+    open("query_mut.fasta", "w").write(f">mut_{diff.iloc[0].Accession}\n{m}\n")
+
+    bl = substitution_matrices.load("BLOSUM62")
+    pa = Align.PairwiseAligner(mode="global", substitution_matrix=bl, open_gap_score=-10, extend_gap_score=-0.5)
+    a = pa.align(wt, m)[0]
+    print(a, "Score:", a.score)
+    for (w0, w1), (m0, m1) in zip(*a.aligned):
+        for k in range(w1 - w0):
+            x, y = wt[w0 + k], m[m0 + k]
+            if x != y:
+                print(f"Позиція {w0 + k + 1}: {x}>{y}, BLOSUM62={bl[x][y]:.0f}, {'консервативна' if bl[x][y] > 0 else 'неконсервативна'}")
+
+    with open("variants.fasta", "w") as f:
+        for i, p in enumerate(dict.fromkeys([wt] + list(diff.prot))):
+            f.write(f">{'wt' if p == wt else f'mut{i}'}\n{p}\n")
+    with open("variants_aln.fasta", "w") as f:
+        subprocess.run(["mafft", "--auto", "--quiet", "variants.fasta"], stdout=f, check=True)
+    print(AlignIO.read("variants_aln.fasta", "fasta"))
+
+if __name__ == "__main__":
+    main()
