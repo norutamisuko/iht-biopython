@@ -1,0 +1,18 @@
+from Bio.Seq import Seq
+
+protein_ref = Seq(
+    "MYSFVSEETGTLIVNSVLLFLAFVVFLLVTLAILTALRLCAYCCNIVNVSLVKPSFYVYSRVKNLNSSRVPDLLV"
+)
+
+# Для мутованого варіанта (наприклад, з точковою місенс-мутацією у разі її наявності, або беремо ту ж послідовність / з мутацією)
+protein_mut = Seq(
+    "MYSFVSEETGTLIVNSVLLFLAFVVFLLVTLAILTALRLCAYCCNIVNVSLVKPSFYVYSRVKNLNSSRVPDLLV"
+)
+
+with open("protein.fasta", "w") as f:
+  f.write(f">SARS-CoV-2_E_protein_wild_type\n{protein_ref}\n")
+
+with open("protein_m.fasta", "w") as f:
+  f.write(f">SARS-CoV-2_E_protein_mutated\n{protein_mut}\n")
+
+print("Файли protein.fasta та protein_m.fasta успішно створено!")
