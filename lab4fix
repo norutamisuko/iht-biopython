@@ -1,0 +1,67 @@
+import math
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+from Bio import SeqIO
+from Bio.PDB import PDBParser
+from Bio.PDB.Polypeptide import PPBuilder
+
+# ---------- 1. FASTA для AlphaFold / ESMFold / SWISS-MODEL ----------
+# query.fasta і homologs.fasta створені в лабі 3 (homologs.fasta[0] - перша мутована послідовність)
+wt = next(SeqIO.parse("query.fasta", "fasta"))
+mut = next(SeqIO.parse("homologs.fasta", "fasta"))
+wt.id, wt.description = "WT", "WT"
+mut.id, mut.description = "MUT", "MUT"
+SeqIO.write(wt, "protein.fasta", "fasta")
+SeqIO.write(mut, "protein_m.fasta", "fasta")
+print("WT :", wt.seq)
+print("MUT:", mut.seq)
+print("Відмінності:", [(i + 1, a, b) for i, (a, b) in enumerate(zip(wt.seq, mut.seq)) if a != b])
+
+# ---------- 2. phi/psi через Bio.PDB (без гліцину) ----------
+def get_phi_psi(pdb_file):
+    struct = PDBParser(QUIET=True).get_structure("M", pdb_file)
+    res = []
+    for pp in PPBuilder().build_peptides(struct):
+        for r, (phi, psi) in zip(pp, pp.get_phi_psi_list()):
+            if phi is None or psi is None or r.get_resname() == "GLY":
+                continue
+            res.append((r.get_resname(), round(math.degrees(phi), 1), round(math.degrees(psi), 1)))
+    return res
+
+# ---------- 3. Карта Рамачандрана ----------
+def plot_ramachandran(phi_psi_list, title, filename):
+    phi = [x[1] for x in phi_psi_list]
+    psi = [x[2] for x in phi_psi_list]
+    fig, ax = plt.subplots(figsize=(6, 6))
+    ax.add_patch(plt.Rectangle((-160, -60), 100, 70, color="lightblue", alpha=0.4, label="α-спіраль"))
+    ax.add_patch(plt.Rectangle((-160, 90), 120, 80, color="lightgreen", alpha=0.4, label="β-лист"))
+    ax.scatter(phi, psi, s=20, color="black", zorder=5)
+    ax.set_xlim(-180, 180); ax.set_ylim(-180, 180)
+    ax.set_xlabel("φ (°)"); ax.set_ylabel("ψ (°)"); ax.set_title(title)
+    ax.axhline(0, color="gray", linewidth=0.5); ax.axvline(0, color="gray", linewidth=0.5)
+    ax.legend(fontsize=9)
+    plt.tight_layout(); plt.savefig(filename, dpi=150); plt.close()
+    print("Збережено:", filename)
+
+def ramachandran_stats(phi_psi_list):
+    core = allowed = generous = disallowed = 0
+    for _, phi, psi in phi_psi_list:
+        if (-160 <= phi <= 0) and (-60 <= psi <= 60):
+            core += 1
+        elif (-160 <= phi <= -60) and (90 <= psi <= 170):
+            core += 1
+        elif (-180 <= phi <= 0) and (-90 <= psi <= 90):
+            allowed += 1
+        elif phi > 0:
+            generous += 1
+        else:
+            disallowed += 1
+    n = max(len(phi_psi_list), 1)
+    print(f"  Core {core/n*100:.1f}% | Allowed {allowed/n*100:.1f}% | "
+          f"Generous {generous/n*100:.1f}% | Disallowed {disallowed/n*100:.1f}%")
+
+for name, pdb in [("Дикий тип", "model_wt.pdb"), ("Мутований", "model_mut.pdb")]:
+    pp = get_phi_psi(pdb)
+    print(name, "- залишків з phi/psi:", len(pp))
+    ramachandran_stats(pp)
+    plot_ramachandran(pp, f"Карта Рамачандрана: {name}", f"rama_{pdb[6:-4]}.png")
