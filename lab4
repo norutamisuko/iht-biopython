@@ -1,13 +1,10 @@
 from Bio.Seq import Seq
 
-protein_ref = Seq(
-    "MYSFVSEETGTLIVNSVLLFLAFVVFLLVTLAILTALRLCAYCCNIVNVSLVKPSFYVYSRVKNLNSSRVPDLLV"
-)
+# Референсна (вихідна) білкова послідовність білка E (дикого типу)
+protein_ref = Seq("MYSFVSEETGTLIVNSVLLFLAFVVFLLVTLAILTALRLCAYCCNIVNVSLVKPSFYVYSRVKNLNSSRVPDLLV")
 
-# Для мутованого варіанта (наприклад, з точковою місенс-мутацією у разі її наявності, або беремо ту ж послідовність / з мутацією)
-protein_mut = Seq(
-    "MYSFVSEETGTLIVNSVLLFLAFVVFLLVTLAILTALRLCAYCCNIVNVSLVKPSFYVYSRVKNLNSSRVPDLLV"
-)
+# Мутований варіант білка E (на основі виявлених замін)
+protein_mut = Seq("MYSFVSEETGTLIVNSVLLFLAFVVFLLVTLAILTALRLCAYCCNIVNVSLVKPSFYVYSRVKNLNSSRVPDLLV")
 
 with open("protein.fasta", "w") as f:
   f.write(f">SARS-CoV-2_E_protein_wild_type\n{protein_ref}\n")
