@@ -1,0 +1,13 @@
+from Bio.PDB import MMCIFParser, PDBIO
+
+# Задайте пути к вашему .cif файлу и будущему .pdb файлу
+cif_file = "input_structure.cif"
+pdb_file = "output_structure.pdb"
+
+parser = MMCIFParser(QUIET=True)
+structure = parser.get_structure("protein", cif_file)
+
+io = PDBIO()
+io.set_structure(structure)
+io.save(pdb_file)
+print(f"Файл успешно конвертирован и сохранен как {pdb_file}")
